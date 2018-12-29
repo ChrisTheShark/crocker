@@ -26,6 +26,9 @@ func nsInitialization() {
 	if err := pivotRoot(newRootPath); err != nil {
 		log.Fatalf("error executing pivot_root - %s\n", err)
 	}
+	if err := syscall.Sethostname([]byte("ns-process")); err != nil {
+		log.Fatalf("error setting container hostname - %s\n", err)
+	}
 	if err := waitForNetwork(); err != nil {
 		log.Fatalf("error waiting for network - %s\n", err)
 	}
