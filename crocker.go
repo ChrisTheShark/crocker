@@ -2,10 +2,10 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"syscall"
 
 	"github.com/docker/docker/pkg/reexec"
@@ -21,10 +21,13 @@ func init() {
 func nsInitialization() {
 	newRootPath := os.Args[1]
 	if err := mountProc(newRootPath); err != nil {
-		log.Fatalf("error mounting proc - %s", err)
+		log.Fatalf("error mounting proc - %s\n", err)
 	}
 	if err := pivotRoot(newRootPath); err != nil {
-		log.Fatalf("error executing pivot_root - %s", err)
+		log.Fatalf("error executing pivot_root - %s\n", err)
+	}
+	if err := waitForNetwork(); err != nil {
+		log.Fatalf("error waiting for network - %s\n", err)
 	}
 	nsRun()
 }
@@ -45,7 +48,11 @@ func nsRun() {
 
 func main() {
 	var rootFsPath string
+	var netSetGoPath string
+
 	flag.StringVar(&rootFsPath, "rootfs", "/tmp/ns-process/rootfs", "Path to the new root file system")
+	flag.StringVar(&netSetGoPath, "netsetgo", "/usr/local/bin/netsetgo", "Path to the netsetgo binary")
+
 	flag.Parse()
 
 	cmd := reexec.Command("nsInitialization", rootFsPath)
@@ -77,8 +84,17 @@ func main() {
 		},
 	}
 
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("Error running the /bin/sh command - %s\n", err)
-		os.Exit(1)
+	if err := cmd.Start(); err != nil {
+		log.Fatalf("Error starting the /bin/sh command - %s\n", err)
+	}
+
+	pid := strconv.Itoa(cmd.Process.Pid)
+	netSetGoCmd := exec.Command(netSetGoPath, "-pid", pid)
+	if err := netSetGoCmd.Run(); err != nil {
+		log.Fatalf("Error running netsetgo binary - %s\n", err)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		log.Fatalf("Error starting the /bin/sh command - %s\n", err)
 	}
 }
